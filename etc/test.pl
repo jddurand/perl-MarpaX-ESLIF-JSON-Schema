@@ -10,8 +10,8 @@ use Data::Scan::Printer;
 
 my $self = MarpaX::ESLIF::JSON::Schema->new(logger => $log);
 my $text = read_file(shift);
-my $result = $self->decode($text);
+my $schema = $self->decode($text);
 local %Data::Scan::Printer::Option = (with_ansicolor => 0, with_deparse => 1);
-dspp($result);
+dspp($schema);
 
 exit(0);
