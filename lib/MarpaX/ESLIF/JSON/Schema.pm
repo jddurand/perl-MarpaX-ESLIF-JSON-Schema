@@ -6,8 +6,8 @@ package MarpaX::ESLIF::JSON::Schema;
 # ABSTRACT: JSON Schema implementation using MarpaX::ESLIF::ECMA404
 
 use Carp qw/croak/;
-use Scalar::Util qw/blessed/;
-use parent qw/MarpaX::ESLIF::ECMA404/;
+use Scalar::Util qw/reftype/;
+use MarpaX::ESLIF::ECMA404;
 #
 # We want to explicitely type the JSON types
 #
@@ -21,157 +21,222 @@ $_BNF =~ s/^\s*\|\s*'false'/$&           action => MarpaX::ESLIF::JSON::Schema::
 $_BNF =~ s/^\s*\|\s*'null'/$&            action => MarpaX::ESLIF::JSON::Schema::_json_null #/sm;
 
 sub new {
-  my ($class, %options) = @_;
+    my ($class, $input, %options) = @_;
 
-  local $MarpaX::ESLIF::ECMA404::_BNF = $_BNF;
-  $class->SUPER::new(%options,
-                     #
-                     # A JSON document trying to define two properties with the same key is undefined,
-                     # so we say this is illegal.
-                     #
-                     disallow_dupkeys => 1
-                    )
+    my $encoding = delete $options{encoding};
+    #
+    # Ok if it autovivifies $options->{logger}
+    #
+    my $self = bless { logger => $options{logger} }, $class;
+
+    local $MarpaX::ESLIF::ECMA404::_BNF = $_BNF;
+    $self->{parser} = MarpaX::ESLIF::ECMA404->new(
+        %options,
+        #
+        # A JSON document trying to define two properties with the same key is undefined,
+        # so we say this is illegal.
+        #
+        disallow_dupkeys => 1
+        );
+    #
+    # A schema it itself an instance, with the restriction that
+    # it HAS to be an object or a boolean
+    #
+    my $schema = $self->{schema} = $self->instance($input, $encoding);
+    my $type = $schema->{type};
+    $self->_ok((grep { $type eq $_ } qw/boolean object/),
+               1, # croak
+               "JSON Schema must be an object or a boolean, got type %s",
+               $type);
+
+    return $self
 }
 
 sub schema {
-  my ($self, @args) = @_;
-  #
-  # A schema it itself an instance, with the restriction that
-  # it HAS to be an object or a boolean
-  #
-  my $schema = $self->instance(@args);
-  my $type = blessed(${$schema});
-  $type =~ s/.*:://;
-  croak "JSON Schema must be an object or a boolean, got type $type" unless grep { $type eq $_ } qw/boolean object/;
+    my ($self) = @_;
 
-  return $schema
+    return $self->{schema}
 }
 
 sub instance {
-  my ($self, @args) = @_;
+  my ($self, $input, $encoding) = @_;
 
-  my $decode = $self->SUPER::decode(@args);
-  #
-  # Because we overwrote all possible RHSs of a JSON value in the grammar,
-  # we are guaranteed that there the value is blessed, unless parsing failed
-  #
-  croak 'JSON Schema parsing failed' unless defined $decode;
-  #
-  # Because $self is reusable, we do a lazy typing saying by blessing
-  # the decode result - a bad programmer would bless to the same value outside
-  # of this package -;
-  #
-  return bless(\$decode, 'MarpaX::ESLIF::JSON::Schema::Instance')
+  my $instance = $self->{parser}->decode($input, $encoding);
+
+  $self->_ok(defined($instance),
+             1, # croak
+             'JSON Schema parsing failed');
+  return $instance
 }
 
+sub eq {
+    my ($self, $schema) = @_;
+    return $self->_json_eq($self->{schema}, $schema)
+}
 
-sub _equal {
-  my ($self, $wanted, $got, @context) = @_;
-  my $context = join('.', @context);
-  #
-  # Check the types
-  #
-  my ($wantedType, $gotType) = (blessed($wanted), blessed($got));
-  croak "At context $context, got type $gotType instead of $wantedType" unless $gotType eq $wantedType;
-  #
-  # Check for values
-  #
-  my ($wantedValue, $gotValue) = ($$wanted, $$got);
-  $gotType =~ s/.*:://;
-  if ($gotType eq 'string') {
-    #
-    # String
-    #
-    return "At context $context, got string $gotValue instead of $wantedValue" unless $gotValue eq $wantedValue;
-  } elsif ($gotType eq 'number') {
-    #
-    # Number
-    #
-    return "At context $context, got number $gotValue instead of $wantedValue" unless $gotValue == $wantedValue; # bignum overwrites if needed
-  } elsif ($gotType eq 'object') {
-    #
-    # Object
-    #
-    foreach my $key (keys %{$wantedValue}) {
-      #
-      # Check each property key
-      #
-      croak "At context $context, property $key is missing" unless exists $gotValue->{$key};
-      #
-      # Check each property value
-      #
-      push(@context, $key);
-      $self->_equal($wantedValue->{$key}, $gotValue->{$key}, @context);
-      pop(@context)
+# --------------------------------------------------------------
+# Generic routine eventually logging and returning true or false
+# --------------------------------------------------------------
+sub _ok {
+    my ($self, $condition, $croak, $format, @rest) = @_;
+
+    if (! $condition) {
+        my $logger = $self->{logger};
+        $logger->errorf($format, @rest) if defined($logger);
+        return 0
     }
-  } elsif ($gotType eq 'array') {
+
+    return 1
+}
+
+# -------------------------
+# Generic equality callback
+# -------------------------
+sub _json_eq {
+    my ($self, $wanted, $got) = @_;
+
+    return 0 unless my $type = $self->_json_type_eq($wanted, $got);
     #
-    # Array
+    # Null type have no equality callback
     #
-    my $wantedArraySize = $#{$wantedValue};
-    my $gotArraySize = $#{$gotValue};
-    croak "At context $context, got array $gotArraySize instead of $wantedArraySize" unless $gotArraySize == $wantedArraySize;
-    foreach my $indice (0..$wantedArraySize) { # No op if it is -1
-      push(@context, $indice);
-      $self->_equal($wantedValue->[$indice], $gotValue->[$indice], @context);
-      pop(@context)
+    return 1 if $type eq 'null';
+
+    my $callback_eq = "_json_${type}_eq";
+    return $self->$callback_eq($wanted, $got)
+}
+
+# -------------
+# Type equality
+# -------------
+sub _json_type_eq {
+    my ($self, $wanted, $got) = @_;
+
+    my $wantedReftype = reftype($wanted) // '';
+    my $gotReftype    = reftype($got)    // '';
+
+    return unless $self->_ok($wantedReftype eq 'HASH',
+                             0, # croak
+                             'First argument reftype must be HASH, got %s',  $wantedReftype);
+    return unless $self->_ok($gotReftype eq 'HASH',
+                             0, # croak
+                             'Second argument reftype must be HASH, got %s', $gotReftype);
+
+    my $wantedType = $wanted->{type} // '';
+    my $gotType    = $got->{type}    // '';
+
+    #
+    # For convenience we return the type instead of a boolean
+    #
+    return $self->_ok($wantedType eq $gotType,
+                      0, # croak
+                      'Excepting type %s, got %s',
+                      $wantedType,
+                      $gotType) ? $wantedType : undef
+}
+
+# ---------------
+# String equality
+# ---------------
+sub _json_string_eq {
+    my ($self, $wanted, $got) = @_;
+
+    my $wantedValue = $wanted->{value};
+    my $gotValue = $got->{value};
+    return $self->_ok($wantedValue eq $gotValue,
+                      0, # croak
+                      'Excepting string "%s", got "%s"',
+                      $wantedValue,
+                      $gotValue)
+}
+
+# ---------------
+# Number equality
+# ---------------
+sub _json_number_eq {
+    my ($self, $wanted, $got) = @_;
+
+    my $wantedValue = $wanted->{value};
+    my $gotValue = $got->{value};
+    return $self->_ok($wantedValue == $gotValue,
+                      0, # croak
+                      'Excepting number %s, got %s',
+                      $wantedValue,
+                      $gotValue)
+}
+
+# ---------------
+# Object equality
+# ---------------
+sub _json_object_eq {
+    my ($self, $wanted, $got) = @_;
+
+    foreach my $key (keys %{$wanted->{value}}) {
+        return unless
+            $self->_ok(exists($got->{value}->{$key}),
+                       0, # croak
+                       'Excepting key "%s" that does not exist',
+                       $key)
+            ||
+            $self->_json_eq($wanted->{value}->{$key},
+                            $got->{value}->{$key})
     }
-  } elsif ($gotType eq 'true') {  # No op, type check is enough
-  } elsif ($gotType eq 'false') {  # No op, type check is enough
-  } elsif ($gotType eq 'null') {  # No op, type check is enough
-  } else { # Should never happen
-    croak "At context $context, unknown type $gotType"
-  }
+    return 1
 }
 
-sub equal {
-  my ($self, $value1, $value2) = @_;
-  foreach ($value1, $value2) {
-    my $blessed = blessed($_);
-    croak "Parameter must be blessed" unless $blessed;
-    croak "Parameter must be blessed to MarpaX::ESLIF::JSON::Schema::Instance" unless $blessed eq 'MarpaX::ESLIF::JSON::Schema::Instance';
-    $self->_equal($value1, $value2)
-  }
+# --------------
+# Array equality
+# --------------
+sub _json_array_eq {
+    my ($self, $wanted, $got) = @_;
+
+    my $wantedRef = $wanted->{value};
+    my $gotRef = $got->{value};
+
+    my $wantedNbElements = scalar(@{$wantedRef});
+    my $gotNbElements = scalar(@{$gotRef});
+
+    return unless $self->_ok($wantedNbElements == $gotNbElements,
+                             0, # croak
+                             'Excepting %d elements, got %d',
+                             $wantedNbElements,
+                             $gotNbElements);
+    my $indice;
+    while ($indice++ < $gotNbElements) {
+        return unless $self->_json_eq($wantedRef->[$indice], $gotRef->[$indice])
+    }
+    return 1
 }
 
-sub _json_type_and_value {
-  my ($type, $value) = @_;
-  return bless(\$value, "MarpaX::ESLIF::JSON::Schema::Type::$type")
+# -------------
+# True equality
+# -------------
+sub _json_true_eq {
+    return 1
 }
 
-sub _json_string {
-  my ($self, $value) = @_;
-  return _json_type_and_value('string', $value)
+# --------------
+# False equality
+# --------------
+sub _json_false_eq {
+    return 0
 }
 
-sub _json_number {
-  my ($self, $value) = @_;
-  return _json_type_and_value('number', $value)
+# -------------
+# Null equality
+# -------------
+sub _json_null_eq {
+    croak '_json_null_eq should never be called'
 }
 
-sub _json_object {
-  my ($self, $value) = @_;
-  return _json_type_and_value('object', $value)
-}
-
-sub _json_array {
-  my ($self, $value) = @_;
-  return _json_type_and_value('array', $value)
-}
-
-sub _json_true {
-  my ($self, $value) = @_;
-  return _json_type_and_value('boolean', $value)
-}
-
-sub _json_false {
-  my ($self, $value) = @_;
-  return _json_type_and_value('boolean', $value)
-}
-
-sub _json_null {
-  my ($self, $value) = @_;
-  return _json_type_and_value('null', undef)
-}
+# ----------------------
+# Parser value callbacks
+# ----------------------
+sub _json_string { my ($self, $value) = @_; return { type => 'string',  value => $value } }
+sub _json_number { my ($self, $value) = @_; return { type => 'number',  value => $value } }
+sub _json_object { my ($self, $value) = @_; return { type => 'object',  value => $value } }
+sub _json_array  { my ($self, $value) = @_; return { type => 'array',   value => $value } }
+sub _json_true   { my ($self, $value) = @_; return { type => 'boolean', value => $value } }
+sub _json_false  { my ($self, $value) = @_; return { type => 'boolean', value => $value } }
+sub _json_null   { my ($self, $value) = @_; return { type => 'null',    value => $value } }
 
 1;
