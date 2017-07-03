@@ -6,7 +6,7 @@ package MarpaX::ESLIF::JSON::Schema;
 # ABSTRACT: JSON Schema implementation using MarpaX::ESLIF::ECMA404
 
 use Carp qw/croak/;
-use Scalar::Util qw/reftype/;
+use Scalar::Util qw/reftype blessed/;
 use MarpaX::ESLIF::ECMA404;
 #
 # We want to explicitely type the JSON types
@@ -43,7 +43,9 @@ sub new {
     # it HAS to be an object or a boolean
     #
     my $schema = $self->{schema} = $self->instance($input, $encoding);
-    my $type = $schema->{type};
+    my $blessed = blessed($schema);
+    my $type = $blessed;
+    $type =~ s/.*:://;
     $self->_ok((grep { $type eq $_ } qw/boolean object/),
                1, # croak
                "JSON Schema must be an object or a boolean, got type %s",
@@ -95,57 +97,62 @@ sub _ok {
 sub _json_eq {
     my ($self, $wanted, $got) = @_;
 
-    return 0 unless my $type = $self->_json_type_eq($wanted, $got);
     #
-    # Null type have no equality callback
+    # A JSON Schema MAY contain properties which are not schema keywords. Unknown keywords SHOULD be ignored.
     #
-    return 1 if $type eq 'null';
+    my $type;
+    if ($self->_json_type_eq($wanted, $got, \$type) > 0) {
+        #
+        # Null type have no equality callback
+        #
+        return 1 if $type eq 'null';
 
-    my $callback_eq = "_json_${type}_eq";
-    return $self->$callback_eq($wanted, $got)
+        my $callback_eq = "_json_${type}_eq";
+        return $self->$callback_eq($wanted, $got)
+    }
+
+    return 1
 }
 
-# -------------
-# Type equality
-# -------------
+# --------------------------------------------------
+# Type equality: -1 to ignore, 0 is false, 1 if true
+# --------------------------------------------------
+my $blessIsSchema = qr/^MarpaX::ESLIF::JSON::Schema::Type::string::(?:string|number|object|array|boolean|null)/;
 sub _json_type_eq {
-    my ($self, $wanted, $got) = @_;
+    my ($self, $schema, $got, $typeRef) = @_;
 
-    my $wantedReftype = reftype($wanted) // '';
-    my $gotReftype    = reftype($got)    // '';
-
-    return unless $self->_ok($wantedReftype eq 'HASH',
-                             0, # croak
-                             'First argument reftype must be HASH, got %s',  $wantedReftype);
-    return unless $self->_ok($gotReftype eq 'HASH',
-                             0, # croak
-                             'Second argument reftype must be HASH, got %s', $gotReftype);
-
-    my $wantedType = $wanted->{type} // '';
-    my $gotType    = $got->{type}    // '';
-
+    my $schemaBlessed = blessed($schema) // '';
     #
-    # For convenience we return the type instead of a boolean
+    # Silently ignore properties that are not a schema
     #
-    return $self->_ok($wantedType eq $gotType,
-                      0, # croak
-                      'Excepting type %s, got %s',
-                      $wantedType,
-                      $gotType) ? $wantedType : undef
+    return -1 unless $schemaBlessed =~ $blessIsSchema;
+    my $schemaType = $schemaBlessed;
+    $schemaType =~ s/.*:://;
+
+    my $gotBlessed = blessed($got) // '';
+    my $gotType = $gotBlessed;
+    $gotType =~ s/.*:://;
+    return 0 unless $self->_ok($schemaType eq $gotType,
+                               0, # croak
+                               'Excepting type %s, got %s',
+                               $schemaType,
+                               $gotType);
+    $$typeRef = $schemaType;
+    return 1
 }
 
 # ---------------
 # String equality
 # ---------------
 sub _json_string_eq {
-    my ($self, $wanted, $got) = @_;
+    my ($self, $schema, $got) = @_;
 
-    my $wantedValue = $wanted->{value};
+    my $schemaValue = $schema->{value};
     my $gotValue = $got->{value};
-    return $self->_ok($wantedValue eq $gotValue,
+    return $self->_ok($schemaValue eq $gotValue,
                       0, # croak
                       'Excepting string "%s", got "%s"',
-                      $wantedValue,
+                      $schemaValue,
                       $gotValue)
 }
 
@@ -153,14 +160,14 @@ sub _json_string_eq {
 # Number equality
 # ---------------
 sub _json_number_eq {
-    my ($self, $wanted, $got) = @_;
+    my ($self, $schema, $got) = @_;
 
-    my $wantedValue = $wanted->{value};
+    my $schemaValue = $schema->{value};
     my $gotValue = $got->{value};
-    return $self->_ok($wantedValue == $gotValue,
+    return $self->_ok($schemaValue == $gotValue,
                       0, # croak
                       'Excepting number %s, got %s',
-                      $wantedValue,
+                      $schemaValue,
                       $gotValue)
 }
 
@@ -168,16 +175,16 @@ sub _json_number_eq {
 # Object equality
 # ---------------
 sub _json_object_eq {
-    my ($self, $wanted, $got) = @_;
+    my ($self, $schema, $got) = @_;
 
-    foreach my $key (keys %{$wanted->{value}}) {
+    foreach my $key (keys %{$schema->{value}}) {
         return unless
             $self->_ok(exists($got->{value}->{$key}),
                        0, # croak
                        'Excepting key "%s" that does not exist',
                        $key)
             ||
-            $self->_json_eq($wanted->{value}->{$key},
+            $self->_json_eq($schema->{value}->{$key},
                             $got->{value}->{$key})
     }
     return 1
@@ -187,22 +194,22 @@ sub _json_object_eq {
 # Array equality
 # --------------
 sub _json_array_eq {
-    my ($self, $wanted, $got) = @_;
+    my ($self, $schema, $got) = @_;
 
-    my $wantedRef = $wanted->{value};
+    my $schemaRef = $schema->{value};
     my $gotRef = $got->{value};
 
-    my $wantedNbElements = scalar(@{$wantedRef});
+    my $schemaNbElements = scalar(@{$schemaRef});
     my $gotNbElements = scalar(@{$gotRef});
 
-    return unless $self->_ok($wantedNbElements == $gotNbElements,
+    return unless $self->_ok($schemaNbElements == $gotNbElements,
                              0, # croak
                              'Excepting %d elements, got %d',
-                             $wantedNbElements,
+                             $schemaNbElements,
                              $gotNbElements);
     my $indice;
     while ($indice++ < $gotNbElements) {
-        return unless $self->_json_eq($wantedRef->[$indice], $gotRef->[$indice])
+        return unless $self->_json_eq($schemaRef->[$indice], $gotRef->[$indice])
     }
     return 1
 }
@@ -231,12 +238,12 @@ sub _json_null_eq {
 # ----------------------
 # Parser value callbacks
 # ----------------------
-sub _json_string { my ($self, $value) = @_; return { type => 'string',  value => $value } }
-sub _json_number { my ($self, $value) = @_; return { type => 'number',  value => $value } }
-sub _json_object { my ($self, $value) = @_; return { type => 'object',  value => $value } }
-sub _json_array  { my ($self, $value) = @_; return { type => 'array',   value => $value } }
-sub _json_true   { my ($self, $value) = @_; return { type => 'boolean', value => $value } }
-sub _json_false  { my ($self, $value) = @_; return { type => 'boolean', value => $value } }
-sub _json_null   { my ($self, $value) = @_; return { type => 'null',    value => $value } }
+sub _json_string { my ($self, $value) = @_; return bless(\$value, 'MarpaX::ESLIF::JSON::Schema::Type::string') }
+sub _json_number { my ($self, $value) = @_; return bless(\$value, 'MarpaX::ESLIF::JSON::Schema::Type::number') }
+sub _json_object { my ($self, $value) = @_; return bless(\$value, 'MarpaX::ESLIF::JSON::Schema::Type::object') }
+sub _json_array  { my ($self, $value) = @_; return bless(\$value, 'MarpaX::ESLIF::JSON::Schema::Type::array') }
+sub _json_true   { my ($self, $value) = @_; return bless(\$value, 'MarpaX::ESLIF::JSON::Schema::Type::boolean') }
+sub _json_false  { my ($self, $value) = @_; return bless(\$value, 'MarpaX::ESLIF::JSON::Schema::Type::boolean') }
+sub _json_null   { my ($self, $value) = @_; return bless(\$value, 'MarpaX::ESLIF::JSON::Schema::Type::null') }
 
 1;
