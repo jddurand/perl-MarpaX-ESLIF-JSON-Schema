@@ -16,7 +16,8 @@ use overload (
 
 sub new {
     # my ($class, $value) = @_;
-    bless($_[1], __PACKAGE__)
+    print STDERR "JDD String\n";
+    bless(\$_[1], __PACKAGE__);
 }
 
 sub _equal {
@@ -25,7 +26,7 @@ sub _equal {
     my $b1 = blessed($_[0]) // '';
     my $b2 = blessed($_[1]) // '';
 
-    $b1 && $b2 && ($b1 eq __PACKAGE__) && ($$_[0] eq $$_[1])
+    $b1 && $b2 && ($b1 eq __PACKAGE__) && ($$$_[0] eq $$$_[1])
 }
 
 1;

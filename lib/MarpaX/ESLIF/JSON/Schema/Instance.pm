@@ -55,6 +55,15 @@ sub new {
     bless(\$decode, __PACKAGE__)
 }
 
+sub is_String { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::String' }
+sub is_Number { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::Number' }
+sub is_Object { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::Object' }
+sub is_Array  { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::Array' }
+sub is_True   { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::True' }
+sub is_False  { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::False' }
+sub is_Null   { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::Null' }
+sub type      { use Data::Dumper; print STDERR Dumper($_[0]); blessed($$$_[0]) }
+
 # ----------------------
 # Parser value callbacks
 # ----------------------

@@ -16,7 +16,8 @@ use overload (
 
 sub new {
     # my ($class, $value) = @_;
-    bless($_[1], __PACKAGE__)
+    print STDERR "JDD Object\n";
+    bless(\$_[1], __PACKAGE__)
 }
 
 sub _equal {
@@ -27,7 +28,7 @@ sub _equal {
 
     return 0 unless $b1 && $b2 && ($b1 eq __PACKAGE__);
 
-    my ($h1, $h2) = ($$_[0], $$_[1]);
+    my ($h1, $h2) = ($$$_[0], $$$_[1]);
     my @keys1 = keys %{$h1};
     my @keys2 = keys %{$h2};
     #

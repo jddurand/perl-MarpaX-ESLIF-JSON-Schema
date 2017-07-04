@@ -16,6 +16,7 @@ use overload (
 
 sub new {
     # my ($class, $value) = @_;
+    print STDERR "JDD Number\n";
     bless(\$_[1], __PACKAGE__)
 }
 

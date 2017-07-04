@@ -16,6 +16,7 @@ use overload (
 
 sub new {
     # my ($class, $value) = @_;
+    print STDERR "JDD Null\n";
     bless(\undef, __PACKAGE__)
 }
 
