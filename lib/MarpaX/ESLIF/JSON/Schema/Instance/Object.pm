@@ -66,8 +66,8 @@ sub _equal {
   #
   # Compare keys
   #
-  map { return 0 unless exists($h2->{$_}) } keys %keys1;
-  map { return 0 unless exists($h1->{$_}) } keys %keys2;
+  map { return 0 unless exists($keys2{$_}); delete $keys2{$_}  } keys %keys1;
+  return 0 if %keys2; # Since there is the same number of keys, if keys2 is not fully consumed then keys differ
   #
   # Compare values
   #

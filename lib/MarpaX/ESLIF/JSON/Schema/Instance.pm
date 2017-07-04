@@ -51,18 +51,18 @@ sub new {
         # so we say this is illegal to have duplicate keys.
         #
         disallow_dupkeys => 1
-                                            );
-    my ($package, $filename, $line) = caller;
+        );
     my $decode = $parser->decode($input, $encoding);
-    use Data::Dumper;
-    print Dumper($decode);
     croak 'JSON parsing failed' unless defined $decode;
 
     bless(\$decode, __PACKAGE__)
 }
 
 sub _stringify {
-  return ${$_[0]}
+    #
+    # MarpaX::ESLIF::JSON::Schema::Instance::.* stringification
+    #
+    return ${$_[0]}
 }
 
 sub _equal {

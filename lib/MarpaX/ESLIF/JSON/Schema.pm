@@ -34,7 +34,10 @@ sub new {
 }
 
 sub _stringify {
-  return ${$_[0]}
+    #
+    # MarpaX::ESLIF::JSON::Schema::Instance stringification
+    #
+    return ${$_[0]}
 }
 
 sub _equal {
