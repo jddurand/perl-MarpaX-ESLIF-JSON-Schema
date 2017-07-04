@@ -20,8 +20,11 @@ use MarpaX::ESLIF::JSON::Schema::Instance::True;
 use MarpaX::ESLIF::JSON::Schema::Instance::False;
 use MarpaX::ESLIF::JSON::Schema::Instance::Null;
 use overload (
-    '==' => sub { $$$_[0] == $$$_[1] }
-);
+              fallback => 1,
+              '""'     => \&_stringify,
+              '=='     => \&_equal,
+              'eq'     => \&_equal
+             );
 
 #
 # We want to explicitely type the JSON types
@@ -48,58 +51,89 @@ sub new {
         # so we say this is illegal to have duplicate keys.
         #
         disallow_dupkeys => 1
-        );
+                                            );
+    my ($package, $filename, $line) = caller;
     my $decode = $parser->decode($input, $encoding);
+    use Data::Dumper;
+    print Dumper($decode);
     croak 'JSON parsing failed' unless defined $decode;
 
     bless(\$decode, __PACKAGE__)
 }
 
-sub is_String { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::String' }
-sub is_Number { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::Number' }
-sub is_Object { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::Object' }
-sub is_Array  { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::Array' }
-sub is_True   { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::True' }
-sub is_False  { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::False' }
-sub is_Null   { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::Null' }
-sub type      { use Data::Dumper; print STDERR Dumper($_[0]); blessed($$$_[0]) }
+sub _stringify {
+  return ${$_[0]}
+}
+
+sub _equal {
+  # my ($s1, $s2) = @_;
+
+  #
+  # All the arguments must be of type MarpaX::ESLIF::JSON::Schema::Instance
+  #
+  my @self;
+  foreach ($_[0], $_[1]) {
+    push(@self, ((blessed($_) // '') =~ /^MarpaX::ESLIF::JSON::Schema::Instance$/)
+         ?
+         $_
+         :
+         eval { MarpaX::ESLIF::JSON::Schema::Instance->new($_) }
+        );
+    return 0 unless defined $self[-1]
+  }
+  #
+  # Compare using overload
+  #
+  return ${$self[0]} == ${$self[1]}
+}
+
+sub is_String  { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::String' }
+sub is_Number  { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::Number' }
+sub is_Object  { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::Object' }
+sub is_Array   { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::Array' }
+sub is_True    { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::True' }
+sub is_False   { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::False' }
+sub is_Null    { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::Null' }
+sub is_Boolean { $_[0]->is_True || $_[0]->is_False }
+sub type       { blessed(${$_[0]}) }
+sub value      { ${$_[0]} }
 
 # ----------------------
 # Parser value callbacks
 # ----------------------
 sub _json_string {
-    # my ($self, $value) = @_;
-    MarpaX::ESLIF::JSON::Schema::Instance::String->new($_[1])
+  # my ($self, $value) = @_;
+  MarpaX::ESLIF::JSON::Schema::Instance::String->new($_[1])
 }
 
 sub _json_number {
-    # my ($self, $value) = @_;
-    MarpaX::ESLIF::JSON::Schema::Instance::Number->new($_[1])
+  # my ($self, $value) = @_;
+  MarpaX::ESLIF::JSON::Schema::Instance::Number->new($_[1])
 }
 
 sub _json_object {
-    # my ($self, $value) = @_;
-    MarpaX::ESLIF::JSON::Schema::Instance::Object->new($_[1])
+  # my ($self, $value) = @_;
+  MarpaX::ESLIF::JSON::Schema::Instance::Object->new($_[1])
 }
 
 sub _json_array {
-    # my ($self, $value) = @_;
-    MarpaX::ESLIF::JSON::Schema::Instance::Array->new($_[1])
+  # my ($self, $value) = @_;
+  MarpaX::ESLIF::JSON::Schema::Instance::Array->new($_[1])
 }
 
 sub _json_true {
-    # my ($self, $value) = @_;
-    MarpaX::ESLIF::JSON::Schema::Instance::True->new()
+  # my ($self, $value) = @_;
+  MarpaX::ESLIF::JSON::Schema::Instance::True->new()
 }
 
 sub _json_false {
-    # my ($self, $value) = @_;
-    MarpaX::ESLIF::JSON::Schema::Instance::False->new()
+  # my ($self, $value) = @_;
+  MarpaX::ESLIF::JSON::Schema::Instance::False->new()
 }
 
 sub _json_null {
-    # my ($self, $value) = @_;
-    MarpaX::ESLIF::JSON::Schema::Instance::Null->new()
+  # my ($self, $value) = @_;
+  MarpaX::ESLIF::JSON::Schema::Instance::Null->new()
 }
 
 1;

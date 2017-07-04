@@ -7,6 +7,7 @@ use Log::Log4perl qw/:easy/;
 use Log::Any::Adapter;
 use Log::Any qw/$log/;
 use Data::Dumper;
+
 #
 # Init log
 #
@@ -21,14 +22,26 @@ Log::Log4perl::init(\$defaultLog4perlConf);
 Log::Any::Adapter->set('Log4perl');
 use MarpaX::ESLIF::JSON::Schema;
 use Data::Scan::Printer;
-
-my $input = read_file(shift);
-my $schema = MarpaX::ESLIF::JSON::Schema->new($input, logger => $log);
 local %Data::Scan::Printer::Option = (with_ansicolor => 0, with_deparse => 1);
-# dspp($schema);
 
-my $schema2 = MarpaX::ESLIF::JSON::Schema->new($input, logger => $log);
-print "==  ? " . ($schema == $schema2 ? 1 : 0) . "\n";
-print "cmp ? " . ($schema cmp $schema2) . "\n";
-print "<=> ? " . ($schema <=> $schema2) . "\n";
+my $input1 = read_file($ARGV[0]);
+my $schema1 = MarpaX::ESLIF::JSON::Schema->new($input1, logger => $log);
+exit;
+die dspp($schema1);
+
+my $input2 = read_file($ARGV[1] // $ARGV[0]);
+my $schema2 = MarpaX::ESLIF::JSON::Schema->new($input2, logger => $log);
+
+if ($schema1 == $schema2) {
+  print "Schemas are equal:\n$schema1\n";
+  #dspp($schema1);
+} else {
+  print "Schemas are not equal\n";
+  #local %Data::Scan::Printer::Option = (with_ansicolor => 0, with_deparse => 1);
+  #dspp($schema1);
+  #print "\n";
+  #dspp($schema2);
+  #print "\n";
+}
+
 exit(0);
