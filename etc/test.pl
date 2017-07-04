@@ -23,10 +23,12 @@ use MarpaX::ESLIF::JSON::Schema;
 use Data::Scan::Printer;
 
 my $input = read_file(shift);
-my $self = MarpaX::ESLIF::JSON::Schema->new($input, logger => $log);
+my $schema = MarpaX::ESLIF::JSON::Schema->new($input, logger => $log);
 local %Data::Scan::Printer::Option = (with_ansicolor => 0, with_deparse => 1);
-my $schema = $self->schema;
 # dspp($schema);
-$self->eq($schema);
 
+my $schema2 = MarpaX::ESLIF::JSON::Schema->new($input, logger => $log);
+print "==  ? " . ($schema == $schema2 ? 1 : 0) . "\n";
+print "cmp ? " . ($schema cmp $schema2) . "\n";
+print "<=> ? " . ($schema <=> $schema2) . "\n";
 exit(0);
