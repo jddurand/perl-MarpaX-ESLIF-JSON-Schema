@@ -26,21 +26,11 @@ Log::Log4perl::init(\$defaultLog4perlConf);
 Log::Any::Adapter->set('Log4perl');
 use MarpaX::ESLIF::JSON::Schema;
 
-my $input1 = read_file($ARGV[0]);
-my $schema1 = MarpaX::ESLIF::JSON::Schema->new($input1, logger => $log);
-
-my $input2 = read_file($ARGV[1] // $ARGV[0]);
-my $schema2 = MarpaX::ESLIF::JSON::Schema->new($input2, logger => $log);
-
-my $cmp = ($schema1 == $schema2);
-
-if ($cmp) {
-  print "Schemas are equal:\n";
-  print "$schema1\n";
-} else {
-  print "Schemas are not equal:\n";
-  print "$schema1\n";
-  print "$schema2\n";
+my $schema_location = shift;
+my $schema = MarpaX::ESLIF::JSON::Schema->new(read_file($schema_location), logger => $log);
+while (@ARGV) {
+    my $input = shift;
+    print "Validating $input against $schema_location\n";
 }
 
-exit($cmp ? EXIT_SUCCESS : EXIT_FAILURE);
+exit(EXIT_SUCCESS);

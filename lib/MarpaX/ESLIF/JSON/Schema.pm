@@ -10,6 +10,7 @@ package MarpaX::ESLIF::JSON::Schema;
 # VERSION
 
 use MarpaX::ESLIF::JSON::Schema::Instance;
+use MarpaX::ESLIF::ECMA404;
 use Carp qw/croak/;
 use Scalar::Util qw/blessed/;
 use overload (
@@ -64,6 +65,32 @@ sub _equal {
   # Compare using overload
   #
   return ${$self[0]} == ${$self[1]}
+}
+
+sub valid {
+    my ($self, $input, %options) = @_;
+    #
+    # We require that input is a scalar
+    #
+    croak 'Input must be a scalar' if ref $input;
+    #
+    # We decode the input
+    #
+    my $encoding = delete $options{encoding};
+    my $parser = MarpaX::ESLIF::ECMA404->new(
+        %options,
+        #
+        # A JSON document trying to define two properties with the same key is undefined,
+        # so we say this is illegal to have duplicate keys.
+        #
+        disallow_dupkeys => 1
+        );
+    my $decode = $parser->decode($input, $encoding);
+    croak 'JSON parsing failed' unless defined $decode;
+    #
+    # Execute validation
+    #
+    ${$self}->valid($decode)
 }
 
 1;
