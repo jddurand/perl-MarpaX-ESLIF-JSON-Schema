@@ -14,8 +14,8 @@ use Scalar::Util qw/blessed/;
 use overload (
               fallback => 1,
               '""'     => \&_stringify,
-              '=='     => sub { my $rc = _equal(@_); print STDERR $rc ? "ARRAY OK\n" : "ARRAY DIFFER\n"; $rc },
-              'eq'     => sub { my $rc = _equal(@_); print STDERR $rc ? "ARRAY OK\n" : "ARRAY DIFFER\n"; $rc }
+              '=='     => \&_equal,
+              'eq'     => \&_equal
              );
 
 sub new {
@@ -64,16 +64,7 @@ sub _equal {
   #
   # Compare elements
   #
-  map {
-    if ($a1->[$_] != $a2->[$_]) {
-      use Data::Dumper;
-      use Scalar::Util qw/blessed/;
-      print STDERR "blessed(\$a1->[$_]) = " . (blessed($a1->[$_]) // '<undef>') . "\n";
-      print STDERR "blessed(\$a2->[$_]) = " . (blessed($a2->[$_]) // '<undef>') . "\n";
-      # print STDERR Dumper([$a1->[$_], $a2->[$_]]);
-    }
-    return 0 unless $a1->[$_] == $a2->[$_]
-  } (0..$#{$a1});
+  map { return 0 unless $a1->[$_] == $a2->[$_] } (0..$#{$a1});
   #
   # Ok
   #

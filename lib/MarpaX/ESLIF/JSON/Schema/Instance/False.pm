@@ -13,8 +13,8 @@ use Scalar::Util qw/blessed/;
 use overload (
               fallback => 1,
               '""'     => \&_stringify,
-              '=='     => sub { my $rc = _equal(@_); print STDERR $rc ? "FALSE OK\n" : "FALSE DIFFER\n"; $rc },
-              'eq'     => sub { my $rc = _equal(@_); print STDERR $rc ? "FALSE OK\n" : "FALSE DIFFER\n"; $rc }
+              '=='     => \&_equal,
+              'eq'     => \&_equal
              );
 
 sub new {

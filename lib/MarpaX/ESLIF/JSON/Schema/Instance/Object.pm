@@ -10,12 +10,13 @@ package MarpaX::ESLIF::JSON::Schema::Instance::Object;
 # VERSION
 
 use MarpaX::ESLIF::JSON::Schema::Instance;
+use MarpaX::ESLIF::JSON::Schema::Instance::String;
 use Scalar::Util qw/blessed/;
 use overload (
               fallback => 1,
               '""'     => \&_stringify,
-              '=='     => sub { my $rc = _equal(@_); print STDERR $rc ? "OBJECT OK\n" : "OBJECT DIFFER\n"; $rc },
-              'eq'     => sub { my $rc = _equal(@_); print STDERR $rc ? "OBJECT OK\n" : "OBJECT DIFFER\n"; $rc }
+              '=='     => \&_equal,
+              'eq'     => \&_equal
              );
 
 sub new {
@@ -25,10 +26,15 @@ sub new {
 }
 
 sub _stringify {
+    #
+    # Take care, in perl a has key is always a pure perl string
+    # (perl automatically stringifies). In order to get a JSON string
+    # we have to get it back as a MarpaX::ESLIF::JSON::Schema::Instance::String.
+    #
   return
     '{'
     .
-    join(',', map { "'$_' => " . ${$_[0]}->{$_} } sort keys %{${$_[0]}})
+    join(',', map { join('=>', MarpaX::ESLIF::JSON::Schema::Instance::String->new($_), ${$_[0]}->{$_}) } sort keys %{${$_[0]}})
     .
     '}'
 }

@@ -96,6 +96,7 @@ sub is_False   { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::False' }
 sub is_Null    { $_[0]->type eq 'MarpaX::ESLIF::JSON::Schema::Instance::Null' }
 sub is_Boolean { $_[0]->is_True || $_[0]->is_False }
 sub type       { blessed(${$_[0]}) }
+sub type_base  { my $type = $_[0]->type; $type =~ s/.*:://; $type }
 sub value      { ${$_[0]} }
 
 # ----------------------

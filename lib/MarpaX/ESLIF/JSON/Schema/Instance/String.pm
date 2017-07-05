@@ -13,8 +13,8 @@ use Scalar::Util qw/blessed/;
 use overload (
               fallback => 1,
               '""'     => \&_stringify,
-              '=='     => sub { my $rc = _equal(@_); print STDERR $rc ? "STRING OK\n" : "STRING DIFFER\n"; $rc },
-              'eq'     => sub { my $rc = _equal(@_); print STDERR $rc ? "STRING OK\n" : "STRING DIFFER\n"; $rc }
+              '=='     => \&_equal,
+              'eq'     => \&_equal
              );
 
 sub new {
@@ -24,7 +24,22 @@ sub new {
 }
 
 sub _stringify {
-  return ${$_[0]}
+    my $escaped = ${$_[0]};
+
+    $escaped =~ s/"/\\"/g;
+    $escaped =~ s/\\/\\\\/g;
+    $escaped =~ s/\//\\\//g;  # Not strictly needed but recommended
+    $escaped =~ s/\x{08}/\\b/g;
+    $escaped =~ s/\x{0C}/\\f/g;
+    $escaped =~ s/\x{0A}/\\n/g;
+    $escaped =~ s/\x{0D}/\\r/g;
+    $escaped =~ s/\x{09}/\\t/g;
+    #
+    # We choose to keep explicitely only the printable ASCII characters (i.e. [ ~])
+    #
+    $escaped =~ s#[^\x{20}-\x{7E}]#my $ord = ord($&); if ($ord <= 0x010000) { sprintf('\u%04X', $ord) } else { $ord -= 0x010000; sprintf('\u%04X\u%04X', $ord/0x400 + 0xD800, $ord%0x400 + 0xDC00) }#eg;
+
+    return "\"$escaped\""
 }
 
 sub _equal {

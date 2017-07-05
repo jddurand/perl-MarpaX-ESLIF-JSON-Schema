@@ -13,8 +13,8 @@ use Scalar::Util qw/blessed/;
 use overload (
               fallback => 1,
               '""'     => \&_stringify,
-              '=='     => sub { my $rc = _equal(@_); print STDERR $rc ? "NUMBER OK\n" : "NUMBER DIFFER\n"; $rc },
-              'eq'     => sub { my $rc = _equal(@_); print STDERR $rc ? "NUMBER OK\n" : "NUMBER DIFFER\n"; $rc }
+              '=='     => \&_equal,
+              'eq'     => \&_equal
              );
 
 sub new {
@@ -41,18 +41,15 @@ sub _equal {
          :
          eval { MarpaX::ESLIF::JSON::Schema::Instance->new($_)->value }
         );
-    print STDERR "OUPS NUMBER 01\n" unless defined $self[-1];
     return 0 unless defined $self[-1]
   }
   #
   # They must be both __PACKAGE__ instances
   #
-  print STDERR "OUPS NUMBER 02\n" unless (blessed($self[0]) eq __PACKAGE__) && (blessed($self[1]) eq __PACKAGE__);
   return 0 unless (blessed($self[0]) eq __PACKAGE__) && (blessed($self[1]) eq __PACKAGE__);
   #
   # They must evaluate to the same value
   #
-  print STDERR "OUPS NUMBER 03\n" unless ${$_[0]} == ${$_[1]};
   return ${$_[0]} == ${$_[1]}
 }
 

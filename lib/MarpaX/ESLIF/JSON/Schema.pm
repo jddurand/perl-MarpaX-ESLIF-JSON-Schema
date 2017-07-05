@@ -28,7 +28,7 @@ sub new {
     #
     my ($package, $filename, $line) = caller;
     my $instance = MarpaX::ESLIF::JSON::Schema::Instance->new($input, %options);
-    croak "JSON Schema must be an object or a boolean, got type " . $instance->type unless $instance->is_Object || $instance->is_Boolean;
+    croak "A JSON Schema must be an JSON object type, or a JSON boolean type, but parsing gives " . lc($instance->type_base) unless $instance->is_Object || $instance->is_Boolean;
 
     return bless(\$instance, __PACKAGE__)
 }
